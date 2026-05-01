@@ -21,6 +21,16 @@
 {% for comment in comments %}
     <p>
         <strong>{{ comment.username }}:</strong>
+
+        <!-- Vulnerable version - XSS:
+             Using |safe allows HTML/JavaScript to run in the browser.
+             Example:
+             {{ comment.comment | safe }}
+        -->
+
+        <!-- Secure version - XSS mitigation:
+             Jinja2 escapes output by default.
+        -->
         {{ comment.comment }}
     </p>
 {% endfor %}
