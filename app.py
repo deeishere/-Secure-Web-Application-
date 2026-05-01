@@ -1,17 +1,20 @@
 import sqlite3
-from flask import Flask, render_template, request
+import bleach
+from flask import Flask, render_template, request, session, redirect, url_for
 
 app = Flask(__name__)
+app.secret_key = "temporary-dev-key"
+
 
 def get_db():
-    """Create a SQLite connection and return rows like dictionaries."""
     conn = sqlite3.connect("users.db")
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def init_db():
-    """Initialize the users table if it does not exist."""
     conn = get_db()
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,70 +22,110 @@ def init_db():
             password TEXT
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            comment TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
 
-# Ensure the database table exists when the app starts.
+
 init_db()
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    """Render the registration form and create a user on POST."""
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        conn = None
-        # inside try if the user tryied SQL inject the app won't crash
-        try:
-                conn = get_db()
-
-                # NOTE: This query is intentionally vulnerable for security practice.
-                 # query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-                 
-                 # NOTE: This query is not vulnerable to SQL Injection 
-                query = "SELECT * FROM users WHERE username = ? AND password = ?", (username, password),
-                user = conn.execute(query).fetchone()
-                conn.close()
-
-                if user:
-                    return "Login successful!"
-                return "Invalid username or password."
-        except sqlite3.Error:
-            return "Registration failed due to a database error.", 500
-        finally:
-            if conn:
-                conn.close()
-
-    return render_template("register.html")
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    """Render the login form and validate credentials on POST."""
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-        conn = None
-        try:
-            conn = get_db()
-            user = conn.execute(
-                "SELECT * FROM users WHERE username = ? AND password = ?",
-                (username, password),
-            ).fetchone()
-            if user:
-                return "Login successful!"
-            return "Invalid username or password."
-        except sqlite3.Error:
-            return "Login failed due to a database error.", 500
-        finally:
-            if conn:
-                conn.close()
-
-    return render_template("login.html")
 
 @app.route("/")
 def home():
-    """Render the home page with navigation links."""
     return render_template("index.html")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            (username, password)
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for("login"))
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        conn = get_db()
+        user = conn.execute(
+            "SELECT * FROM users WHERE username = ? AND password = ?",
+            (username, password)
+        ).fetchone()
+        conn.close()
+
+        if user:
+            session["username"] = username
+            return redirect(url_for("dashboard"))
+
+        return "Invalid username or password."
+
+    return render_template("login.html")
+
+
+@app.route("/dashboard")
+def dashboard():
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+    comments = conn.execute("SELECT * FROM comments").fetchall()
+    conn.close()
+
+    return render_template(
+        "dashboard.html",
+        username=session["username"],
+        comments=comments
+    )
+
+
+@app.route("/comment", methods=["POST"])
+def add_comment():
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    raw_comment = request.form.get("comment")
+
+    # XSS mitigation: sanitize user input before saving
+    clean_comment = bleach.clean(raw_comment)
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO comments (username, comment) VALUES (?, ?)",
+        (session["username"], clean_comment)
+    )
+    conn.commit()
+    conn.close()
+
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("home"))
+
 
 if __name__ == "__main__":
     app.run(debug=True)
