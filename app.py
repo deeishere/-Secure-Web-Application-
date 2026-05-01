@@ -107,7 +107,13 @@ def add_comment():
 
     raw_comment = request.form.get("comment")
 
-    # XSS mitigation: sanitize user input before saving
+    # Vulnerable version - XSS:
+    # This saves user input without sanitization.
+    # Example attack: <script>alert("XSS")</script>
+    # clean_comment = raw_comment
+
+    # Secure version - XSS mitigation:
+    # bleach.clean() sanitizes the input and removes dangerous scripts.
     clean_comment = bleach.clean(raw_comment)
 
     conn = get_db()
