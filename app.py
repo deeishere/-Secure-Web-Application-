@@ -1,9 +1,31 @@
 import sqlite3
 import bleach
+import os                                    # Part 1: needed for os.urandom
 from flask import Flask, render_template, request, session, redirect, url_for
+from cryptography.fernet import Fernet       # Part 3: needed for email encryption
 
 app = Flask(__name__)
-app.secret_key = "temporary-dev-key"
+
+# ── Encryption Part 1: Secure Secret Key ─────────────────────
+# VULNERABLE: app.secret_key = "temporary-dev-key"
+# Hardcoded keys let anyone who reads the source forge session cookies.
+# SECURE: os.urandom(24) generates a random unpredictable key every run.
+app.secret_key = os.urandom(24)
+
+# ── Encryption Part 3: Fernet setup ──────────────────────────
+# Generate key once, then store it in fernet.key
+
+KEY_FILE = "fernet.key"
+
+if os.path.exists(KEY_FILE):
+    with open(KEY_FILE, "rb") as f:
+        FERNET_KEY = f.read()
+else:
+    FERNET_KEY = Fernet.generate_key()
+    with open(KEY_FILE, "wb") as f:
+        f.write(FERNET_KEY)
+
+fernet = Fernet(FERNET_KEY)
 
 
 def get_db():
@@ -15,11 +37,14 @@ def get_db():
 def init_db():
     conn = get_db()
 
+    # Added email column to store Fernet-encrypted email
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT,
-            password TEXT
+            password TEXT,
+            email TEXT,
+            role TEXT DEFAULT 'user'
         )
     """)
 
@@ -48,11 +73,17 @@ def register():
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+        email    = request.form.get("email")        # Part 3: get email from form
+
+        # ── Encryption Part 3: Encrypt email before saving ───
+        # VULNERABLE: plaintext email exposes user data if DB is breached.
+        # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
+        encrypted_email = fernet.encrypt(email.encode()).decode()
 
         conn = get_db()
         conn.execute(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
-            (username, password)
+            "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
+            (username, password, encrypted_email)
         )
         conn.commit()
         conn.close()
@@ -92,11 +123,23 @@ def dashboard():
 
     conn = get_db()
     comments = conn.execute("SELECT * FROM comments").fetchall()
+
+    # ── Encryption Part 3: Decrypt email for display ─────────
+    # fernet.decrypt() reverses the encryption to show the real email.
+    user = conn.execute(
+        "SELECT email FROM users WHERE username = ?",
+        (session["username"],)
+    ).fetchone()
     conn.close()
+
+    decrypted_email = ""
+    if user and user["email"]:
+        decrypted_email = fernet.decrypt(user["email"].encode()).decode()
 
     return render_template(
         "dashboard.html",
         username=session["username"],
+        email=decrypted_email,
         comments=comments
     )
 
@@ -166,4 +209,8 @@ def logout():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # ── Encryption Part 2: Enable HTTPS ──────────────────────
+    # VULNERABLE: app.run(debug=True) uses plain HTTP — data travels unencrypted.
+    # SECURE: ssl_context='adhoc' generates a self-signed TLS certificate so all
+    # traffic between browser and server is encrypted in transit.
+    app.run(debug=True, ssl_context='adhoc')
