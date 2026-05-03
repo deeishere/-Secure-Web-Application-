@@ -77,6 +77,7 @@ def login():
 
         if user:
             session["username"] = username
+            session["role"] = user["role"] 
             return redirect(url_for("dashboard"))
 
         return "Invalid username or password."
@@ -125,6 +126,37 @@ def add_comment():
     conn.close()
 
     return redirect(url_for("dashboard"))
+
+# ── Role-based access control decorator ──────────────────────
+from functools import wraps
+from flask import abort
+
+SECURE_MODE = True  # set to False to demo the vulnerability
+
+def role_required(role):
+    def decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not SECURE_MODE:
+                return f(*args, **kwargs)  # vulnerable: no check
+            if session.get("role") != role:
+                abort(403)                 # secure: wrong role → forbidden
+            return f(*args, **kwargs)
+        return decorated
+    return decorator
+
+
+@app.route("/admin")
+@role_required("admin")
+def admin():
+    if "username" not in session:
+        return redirect(url_for("login"))
+
+    conn = get_db()
+    users = conn.execute("SELECT id, username, role FROM users").fetchall()
+    conn.close()
+
+    return render_template("admin.html", users=users)
 
 
 @app.route("/logout")
