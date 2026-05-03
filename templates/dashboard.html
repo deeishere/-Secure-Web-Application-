@@ -1,24 +1,27 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Dashboard</title>
 </head>
+
 <body>
 
-<h2>Dashboard</h2>
+    <h2>Dashboard</h2>
 
-<p>Welcome, {{ username }}</p>
+    <p>Welcome, {{ username }}</p>
+    <p>Email: {{ email }}</p>
 
-<h3>Add Comment</h3>
+    <h3>Add Comment</h3>
 
-<form method="POST" action="/comment">
-    <input type="text" name="comment" placeholder="Write a comment" required>
-    <button type="submit">Post</button>
-</form>
+    <form method="POST" action="/comment">
+        <input type="text" name="comment" placeholder="Write a comment" required>
+        <button type="submit">Post</button>
+    </form>
 
-<h3>Comments</h3>
+    <h3>Comments</h3>
 
-{% for comment in comments %}
+    {% for comment in comments %}
     <p>
         <strong>{{ comment.username }}:</strong>
 
@@ -33,10 +36,11 @@
         -->
         {{ comment.comment }}
     </p>
-{% endfor %}
+    {% endfor %}
 
-<br>
-<a href="/logout">Logout</a>
+    <br>
+    <a href="/logout">Logout</a>
 
 </body>
+
 </html>
