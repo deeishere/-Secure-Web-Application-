@@ -70,48 +70,100 @@ def home():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    """Render the registration form, register user, and demonstrate both query styles + encryption."""
+
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
         email    = request.form.get("email")        # Part 3: get email from form
 
-        # ── Encryption Part 3: Encrypt email before saving ───
-        # VULNERABLE: plaintext email exposes user data if DB is breached.
-        # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
-        encrypted_email = fernet.encrypt(email.encode()).decode()
+        conn = None
 
-        conn = get_db()
-        conn.execute(
-            "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
-            (username, password, encrypted_email)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn = get_db()
 
-        return redirect(url_for("login"))
+            # ─────────────────────────────────────────────
+            # NOTE: This query is intentionally vulnerable for security practice.
+            # query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+
+            # NOTE: This query is NOT vulnerable to SQL Injection
+            # FIX: removed trailing comma that turned it into a tuple
+            query = "SELECT * FROM users WHERE username = ? AND password = ?"
+            user = conn.execute(query, (username, password)).fetchone()
+
+            # ─────────────────────────────────────────────
+            # Part 3: Encrypt email before saving
+            # VULNERABLE: plaintext email exposes user data if DB is breached.
+            # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
+            encrypted_email = fernet.encrypt(email.encode()).decode()
+
+            # Insert user (only if not exists / or you can decide logic)
+            conn.execute(
+                "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
+                (username, password, encrypted_email)
+            )
+
+            conn.commit()
+
+            # login check result (kept from first version)
+            if user:
+                conn.close()
+                return "Login successful!"
+
+            conn.close()
+            return "User inserted, but login check failed."
+
+        except sqlite3.Error:
+            return "Registration failed due to a database error.", 500
+
+        finally:
+            if conn:
+                conn.close()
 
     return render_template("register.html")
 
 
+SQL_INJECTION_MODE = False  # 🔴 change to False for secure version
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """Login route demonstrating secure vs vulnerable SQL handling."""
+
     if request.method == "POST":
         username = request.form.get("username")
         password = request.form.get("password")
+        conn = None
 
-        conn = get_db()
-        user = conn.execute(
-            "SELECT * FROM users WHERE username = ? AND password = ?",
-            (username, password)
-        ).fetchone()
-        conn.close()
+        try:
+            conn = get_db()
 
-        if user:
-            session["username"] = username
-            session["role"] = user["role"] 
-            return redirect(url_for("dashboard"))
+            # ─────────────────────────────────────────────
+            if SQL_INJECTION_MODE:
+                # ❌ VULNERABLE VERSION (for SQL injection testing only)
+                query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
+                user = conn.execute(query).fetchone()
 
-        return "Invalid username or password."
+            else:
+                # ✅ SECURE VERSION (production-safe)
+                user = conn.execute(
+                    "SELECT * FROM users WHERE username = ? AND password = ?",
+                    (username, password),
+                ).fetchone()
+
+            # ─────────────────────────────────────────────
+
+            if user:
+                session["username"] = username
+                return redirect(url_for("dashboard"))
+        
+            return "Invalid username or password."
+
+        except sqlite3.Error:
+            return "Login failed due to a database error.", 500
+
+        finally:
+            if conn:
+                conn.close()
 
     return render_template("login.html")
 
