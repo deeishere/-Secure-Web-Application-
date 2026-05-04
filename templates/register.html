@@ -1,19 +1,24 @@
 <!DOCTYPE html>
 <html>
+<head>
+    <title>Register</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
 <body>
+<div class="page">
+    <h2>Register</h2>
 
-<h2>Register</h2>
+    <form method="POST">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <!-- Email field added — encrypted with Fernet before saving to DB (Encryption Part 3) -->
+        <input type="email" name="email" placeholder="Email" required>
+        <button type="submit">Register</button>
+    </form>
 
-<form method="POST">
-    <input type="text" name="username" placeholder="Username" required>
-    <input type="password" name="password" placeholder="Password" required>
-    <!-- Email field added — encrypted with Fernet before saving to DB (Encryption Part 3) -->
-    <input type="email" name="email" placeholder="Email" required>
-    <button type="submit">Register</button>
-</form>
-
-<br>
-<a href="/login">Already have an account? Login</a>
+    <br>
+    <a href="/login">Already have an account? Login</a>
+</div>
 
 </body>
 </html>
