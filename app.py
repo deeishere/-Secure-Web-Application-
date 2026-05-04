@@ -76,6 +76,10 @@ def register():
         username = request.form.get("username")
         password = request.form.get("password")
         email    = request.form.get("email")        # Part 3: get email from form
+        # ── Encryption Part 3: Encrypt email before saving ───
+        # VULNERABLE: plaintext email exposes user data if DB is breached.
+        # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
+        encrypted_email = fernet.encrypt(email.encode()).decode()
 
         conn = None
 
@@ -108,7 +112,7 @@ def register():
             # login check result (kept from first version)
             if user:
                 conn.close()
-                return "Login successful!"
+                return redirect(url_for("dashboard"))
 
             conn.close()
             return "User inserted, but login check failed."
