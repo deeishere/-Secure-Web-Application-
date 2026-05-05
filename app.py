@@ -76,22 +76,21 @@ def register():
         username = request.form.get("username")
         password = request.form.get("password")
         email    = request.form.get("email")        # Part 3: get email from form
-        # ── Encryption Part 3: Encrypt email before saving ───
-        # VULNERABLE: plaintext email exposes user data if DB is breached.
-        # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
-        encrypted_email = fernet.encrypt(email.encode()).decode()
-
         conn = None
 
         try:
             conn = get_db()
+            
+            # ── Encryption Part 3: Encrypt email before saving ───
+            # VULNERABLE: plaintext email exposes user data if DB is breached.
+            # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
+            encrypted_email = fernet.encrypt(email.encode()).decode()
 
             # ─────────────────────────────────────────────
             # NOTE: This query is intentionally vulnerable for security practice.
             # query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
 
-            # NOTE: This query is NOT vulnerable to SQL Injection
-            # FIX: removed trailing comma that turned it into a tuple
+            # SECURE VERSION (used in app)
             query = "SELECT * FROM users WHERE username = ? AND password = ?"
             user = conn.execute(query, (username, password)).fetchone()
 
@@ -99,7 +98,15 @@ def register():
             # Part 3: Encrypt email before saving
             # VULNERABLE: plaintext email exposes user data if DB is breached.
             # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
-            encrypted_email = fernet.encrypt(email.encode()).decode()
+
+            # Insert user (only if not exists / or you can decide logic)
+            existing_user = conn.execute(
+                "SELECT * FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+
+            if existing_user:
+                return "Username already exists. Please choose another username."
 
             # Insert user (only if not exists / or you can decide logic)
             conn.execute(
@@ -108,14 +115,7 @@ def register():
             )
 
             conn.commit()
-
-            # login check result (kept from first version)
-            if user:
-                conn.close()
-                return redirect(url_for("dashboard"))
-
-            conn.close()
-            return "User inserted, but login check failed."
+            return redirect(url_for("login"))
 
         except sqlite3.Error:
             return "Registration failed due to a database error.", 500
@@ -127,7 +127,7 @@ def register():
     return render_template("register.html")
 
 
-SQL_INJECTION_MODE = False  # 🔴 change to False for secure version
+SQL_INJECTION_MODE = False  # set to True to enable vulnerable mode
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -158,6 +158,7 @@ def login():
 
             if user:
                 session["username"] = username
+                session["role"] = user["role"]
                 return redirect(url_for("dashboard"))
         
             return "Invalid username or password."
@@ -237,9 +238,14 @@ def role_required(role):
         @wraps(f)
         def decorated(*args, **kwargs):
             if not SECURE_MODE:
-                return f(*args, **kwargs)  # vulnerable: no check
+                return f(*args, **kwargs)
+
+            if "username" not in session:
+                return redirect(url_for("login"))
+
             if session.get("role") != role:
-                abort(403)                 # secure: wrong role → forbidden
+                abort(403)
+
             return f(*args, **kwargs)
         return decorated
     return decorator
