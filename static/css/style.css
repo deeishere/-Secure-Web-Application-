@@ -93,6 +93,17 @@ form {
     margin-bottom: 1.25rem;
 }
 
+.error-message {
+    margin-bottom: 0.9rem;
+    padding: 0.7rem 0.85rem;
+    border-left: 4px solid var(--danger);
+    background: #faecea;
+    color: var(--danger);
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
 input[type="text"],
 input[type="password"],
 input[type="email"] {

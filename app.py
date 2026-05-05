@@ -161,7 +161,7 @@ def login():
                 session["role"] = user["role"]
                 return redirect(url_for("dashboard"))
         
-            return "Invalid username or password."
+            return render_template("login.html", error_message="Invalid username or password.")
 
         except sqlite3.Error:
             return "Login failed due to a database error.", 500
@@ -170,7 +170,7 @@ def login():
             if conn:
                 conn.close()
 
-    return render_template("login.html")
+    return render_template("login.html", error_message=None)
 
 
 @app.route("/dashboard")
