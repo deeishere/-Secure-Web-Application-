@@ -2,3 +2,4 @@ Flask==3.1.2
 bleach
 cryptography
 pyopenssl
+Flask-Bcrypt

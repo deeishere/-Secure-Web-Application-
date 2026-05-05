@@ -3,8 +3,11 @@ import bleach
 import os                                    # Part 1: needed for os.urandom
 from flask import Flask, render_template, request, session, redirect, url_for
 from cryptography.fernet import Fernet       # Part 3: needed for email encryption
+from flask_bcrypt import Bcrypt
+
 
 app = Flask(__name__)
+bcrypt = Bcrypt(app)
 
 # ── Encryption Part 1: Secure Secret Key ─────────────────────
 # VULNERABLE: app.secret_key = "temporary-dev-key"
@@ -87,12 +90,11 @@ def register():
             encrypted_email = fernet.encrypt(email.encode()).decode()
 
             # ─────────────────────────────────────────────
-            # NOTE: This query is intentionally vulnerable for security practice.
-            # query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-
-            # SECURE VERSION (used in app)
-            query = "SELECT * FROM users WHERE username = ? AND password = ?"
-            user = conn.execute(query, (username, password)).fetchone()
+            # ── Password Storage Part 3: Hashing (Person 3 Task) ───
+            # VULNERABLE: Storing 'password' directly is insecure.
+            # SECURE: bcrypt.generate_password_hash creates a salted, secure hash.
+            # We .decode('utf-8') to store it as a string in SQLite.
+            hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
             # ─────────────────────────────────────────────
             # Part 3: Encrypt email before saving
@@ -111,7 +113,7 @@ def register():
             # Insert user (only if not exists / or you can decide logic)
             conn.execute(
                 "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
-                (username, password, encrypted_email)
+                (username, hashed_password, encrypted_email)
             )
 
             conn.commit()
@@ -141,25 +143,32 @@ def login():
         try:
             conn = get_db()
 
-            # ─────────────────────────────────────────────
             if SQL_INJECTION_MODE:
-                # ❌ VULNERABLE VERSION (for SQL injection testing only)
+                # VULNERABLE VERSION (for SQL injection testing)
+                # This uses string formatting and checks plaintext, which is insecure.
                 query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
                 user = conn.execute(query).fetchone()
+                
+                # In vulnerable mode, we assume passwords might be stored as plaintext or MD5
+                if user:
+                    session["username"] = username
+                    session["role"] = user["role"]
+                    return redirect(url_for("dashboard"))
 
             else:
-                # ✅ SECURE VERSION (production-safe)
+                # SECURE VERSION (production-safe)
+                # 1. Fetch the user by username ONLY using a parameterized query.
                 user = conn.execute(
-                    "SELECT * FROM users WHERE username = ? AND password = ?",
-                    (username, password),
+                    "SELECT * FROM users WHERE username = ?",
+                    (username,),
                 ).fetchone()
 
-            # ─────────────────────────────────────────────
-
-            if user:
-                session["username"] = username
-                session["role"] = user["role"]
-                return redirect(url_for("dashboard"))
+                # 2. Use Bcrypt to verify the salted hash 
+                # bcrypt.check_password_hash(stored_hash, provided_plaintext)
+                if user and bcrypt.check_password_hash(user["password"], password):
+                    session["username"] = username
+                    session["role"] = user["role"]
+                    return redirect(url_for("dashboard"))
         
             return render_template("login.html", error_message="Invalid username or password.")
 
