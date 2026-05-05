@@ -238,13 +238,13 @@ def role_required(role):
         @wraps(f)
         def decorated(*args, **kwargs):
             if not SECURE_MODE:
-                return f(*args, **kwargs)
+                return f(*args, **kwargs)  # vulnerable: no check
 
             if "username" not in session:
                 return redirect(url_for("login"))
 
             if session.get("role") != role:
-                abort(403)
+                abort(403)  # secure: wrong role → forbidden
 
             return f(*args, **kwargs)
         return decorated
