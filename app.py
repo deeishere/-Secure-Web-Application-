@@ -1,26 +1,30 @@
 import sqlite3
 import bleach
-import os                                    # Part 1: needed for os.urandom
+import os                                    # Part 1: needed for os.urandom / environ
 from flask import Flask, render_template, request, session, redirect, url_for
 from cryptography.fernet import Fernet       # Part 3: needed for email encryption
 from flask_bcrypt import Bcrypt
+from functools import wraps
+from flask import abort
 
 
 app = Flask(__name__)
-# Initialize Bcrypt for secure password hashing. 
-# We use bcrypt because it automatically handles 'salting' and has a 'work factor' 
+
+# Initialize Bcrypt for secure password hashing.
+# We use bcrypt because it automatically handles 'salting' and has a 'work factor'
 # to slow down brute-force attacks compared to MD5 or SHA-1
 bcrypt = Bcrypt(app)
 
 # ── Encryption Part 1: Secure Secret Key ─────────────────────
 # VULNERABLE: app.secret_key = "temporary-dev-key"
 # Hardcoded keys let anyone who reads the source forge session cookies.
-# SECURE: os.urandom(24) generates a random unpredictable key every run.
-app.secret_key = os.urandom(24)
+# SECURE: Read from environment variable so the key survives server restarts.
+# Falls back to os.urandom(24) if SECRET_KEY is not set (fine for dev, not production).
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 
 # ── Encryption Part 3: Fernet setup ──────────────────────────
-# Generate key once, then store it in fernet.key
-
+# Generate key once, then persist it in fernet.key so encrypted emails
+# remain decryptable across server restarts.
 KEY_FILE = "fernet.key"
 
 if os.path.exists(KEY_FILE):
@@ -43,11 +47,13 @@ def get_db():
 def init_db():
     conn = get_db()
 
-    # Added email column to store Fernet-encrypted email
+    # Added email column to store Fernet-encrypted email.
+    # username is UNIQUE at the DB level as a second safety net
+    # (a manual check also exists inside register() for a user-friendly message).
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT,
+            username TEXT UNIQUE,
             password TEXT,
             email TEXT,
             role TEXT DEFAULT 'user'
@@ -74,9 +80,15 @@ def home():
     return render_template("index.html")
 
 
+# ── SQL Injection mode flag ───────────────────────────────────
+# Set to True to demo the vulnerable version on BOTH register and login.
+# Set to False (default) for the secure, production-safe version.
+SQL_INJECTION_MODE = False
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    """Render the registration form, register user, and demonstrate both query styles + encryption."""
+    """Render the registration form and demonstrate secure vs vulnerable SQL + encryption."""
 
     if request.method == "POST":
         username = request.form.get("username")
@@ -86,35 +98,52 @@ def register():
 
         try:
             conn = get_db()
-            
-            # ── Encryption Part 3: Encrypt email before saving ───
+
+            if SQL_INJECTION_MODE:
+                # ── VULNERABLE VERSION (SQL Injection demo) ───────────
+                # String formatting allows malicious input, e.g.: admin'--
+                # Passwords stored as plaintext — never do this in production.
+                query = f"SELECT * FROM users WHERE username = '{username}'"
+                existing_user = conn.execute(query).fetchone()
+
+                if existing_user:
+                    return render_template(
+                    "register.html",
+                    error_message="Username already exists. Please choose another username."
+                )
+
+                conn.execute(
+                    f"INSERT INTO users (username, password, email) "
+                    f"VALUES ('{username}', '{password}', '{email}')"
+                )
+                conn.commit()
+                return redirect(url_for("login"))
+
+            # ── SECURE VERSION ────────────────────────────────────────
+
+            # ── Encryption Part 3: Encrypt email before saving ────────
             # VULNERABLE: plaintext email exposes user data if DB is breached.
-            # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
+            # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes to string for SQLite.
             encrypted_email = fernet.encrypt(email.encode()).decode()
 
-            # ─────────────────────────────────────────────
-            # ── Password Storage Part 3: Hashing (Person 3 Task) ───
-            # VULNERABLE: Storing 'password' as plaintext or MD5 exposes user credentials.
-            # SECURE: bcrypt.generate_password_hash creates a unique salted hash for every user.
-            # We .decode('utf-8') to store it as a string in SQLite.
-            # even if two users have the same password, their hashes will differ due to salting, making it more secure against rainbow table attacks.
+            # ── Password Storage: bcrypt hashing ─────────────────────
+            # VULNERABLE: Storing password as plaintext or MD5 exposes user credentials.
+            # SECURE: bcrypt.generate_password_hash creates a unique salted hash per user.
+            # Even two identical passwords produce different hashes — resistant to rainbow tables.
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
-            # ─────────────────────────────────────────────
-            # Part 3: Encrypt email before saving
-            # VULNERABLE: plaintext email exposes user data if DB is breached.
-            # SECURE: fernet.encrypt() encrypts email; .decode() converts bytes → string for SQLite.
-
-            # Insert user (only if not exists / or you can decide logic)
+            # Manual duplicate check gives a friendly error message before the DB constraint fires.
             existing_user = conn.execute(
                 "SELECT * FROM users WHERE username = ?",
                 (username,)
             ).fetchone()
 
             if existing_user:
-                return "Username already exists. Please choose another username."
+                return render_template(
+                    "register.html",
+                    error_message="Username already exists. Please choose another username."
+                )
 
-            # Insert user (only if not exists / or you can decide logic)
             conn.execute(
                 "INSERT INTO users (username, password, email) VALUES (?, ?, ?)",
                 (username, hashed_password, encrypted_email)
@@ -133,8 +162,6 @@ def register():
     return render_template("register.html")
 
 
-SQL_INJECTION_MODE = False  # set to True to enable vulnerable mode
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Login route demonstrating secure vs vulnerable SQL handling."""
@@ -148,32 +175,32 @@ def login():
             conn = get_db()
 
             if SQL_INJECTION_MODE:
-                # VULNERABLE VERSION (for SQL injection testing)
-                # This uses string formatting and checks plaintext, which is insecure.
+                # ── VULNERABLE VERSION (SQL Injection demo) ───────────
+                # String formatting + plaintext password comparison — easily bypassed.
+                # Example payload: ' OR '1'='1'--
                 query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
                 user = conn.execute(query).fetchone()
-                
-                # In vulnerable mode, we assume passwords might be stored as plaintext or MD5
+
                 if user:
                     session["username"] = username
                     session["role"] = user["role"]
                     return redirect(url_for("dashboard"))
 
             else:
-                # SECURE VERSION (production-safe)
-                # 1. Fetch the user by username ONLY using a parameterized query to prevent matching passwords in SQL.
+                # ── SECURE VERSION ────────────────────────────────────
+                # 1. Fetch user by username ONLY with a parameterized query.
+                #    Never include the password in the SQL WHERE clause.
                 user = conn.execute(
                     "SELECT * FROM users WHERE username = ?",
                     (username,),
                 ).fetchone()
 
-                # 2. Use Bcrypt to verify the salted hash 
-                # bcrypt.check_password_hash(stored_hash, provided_plaintext)
+                # 2. bcrypt.check_password_hash verifies the salted hash safely.
                 if user and bcrypt.check_password_hash(user["password"], password):
                     session["username"] = username
                     session["role"] = user["role"]
                     return redirect(url_for("dashboard"))
-        
+
             return render_template("login.html", error_message="Invalid username or password.")
 
         except sqlite3.Error:
@@ -194,7 +221,7 @@ def dashboard():
     conn = get_db()
     comments = conn.execute("SELECT * FROM comments").fetchall()
 
-    # ── Encryption Part 3: Decrypt email for display ─────────
+    # ── Encryption Part 3: Decrypt email for display ──────────
     # fernet.decrypt() reverses the encryption to show the real email.
     user = conn.execute(
         "SELECT email FROM users WHERE username = ?",
@@ -221,13 +248,13 @@ def add_comment():
 
     raw_comment = request.form.get("comment")
 
-    # Vulnerable version - XSS:
-    # This saves user input without sanitization.
-    # Example attack: <script>alert("XSS")</script>
+    # VULNERABLE version - XSS:
+    # Saves raw input without sanitization — allows <script>alert("XSS")</script>
     # clean_comment = raw_comment
 
-    # Secure version - XSS mitigation:
-    # bleach.clean() sanitizes the input and removes dangerous scripts.
+    # SECURE version - XSS mitigation:
+    # bleach.clean() strips dangerous HTML/JS tags before saving to DB.
+    # Jinja2 also escapes output by default (no |safe used in dashboard.html).
     clean_comment = bleach.clean(raw_comment)
 
     conn = get_db()
@@ -240,28 +267,33 @@ def add_comment():
 
     return redirect(url_for("dashboard"))
 
-# ── Role-based access control decorator ──────────────────────
-from functools import wraps
-from flask import abort
 
-SECURE_MODE = True  # set to False to demo the vulnerability
+# ── Role-based access control decorator ──────────────────────
+SECURE_MODE = True  # set to False to demo the RBAC vulnerability
 
 def role_required(role):
     def decorator(f):
         @wraps(f)
         def decorated(*args, **kwargs):
             if not SECURE_MODE:
-                return f(*args, **kwargs)  # vulnerable: no check
+                return f(*args, **kwargs)  # vulnerable: no role check at all
 
             if "username" not in session:
                 return redirect(url_for("login"))
 
             if session.get("role") != role:
-                abort(403)  # secure: wrong role → forbidden
+                abort(403)  # secure: wrong role triggers our custom 403 handler
 
             return f(*args, **kwargs)
         return decorated
     return decorator
+
+
+# ── Custom 403 error handler ──────────────────────────────────
+# Without this, Flask shows its default plain-text 403 page instead of our 403.html.
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template("403.html"), 403
 
 
 @app.route("/admin")
