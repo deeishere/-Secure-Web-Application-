@@ -10,9 +10,13 @@
     <div class="page">
 
         <h2>Dashboard</h2>
-
         <p>Welcome, {{ username }}</p>
         <p>Email: {{ email }}</p>
+        {% if session["role"] == "admin" %}
+        <div class="back-link">
+            <a href="{{ url_for('admin') }}">Admin Panel</a>
+        </div>
+        {% endif %}
 
         <h3>Add Comment</h3>
 
