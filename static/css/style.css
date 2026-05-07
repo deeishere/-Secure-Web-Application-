@@ -220,3 +220,25 @@ tr:last-child td {
 .page h1+p {
     margin-bottom: 1.25rem;
 }
+/* ── Back button ───────────────────────── */
+
+.back-link {
+    margin-top: 1.2rem;
+}
+
+.back-link a {
+    display: inline-block;
+    padding: 0.55rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.back-link a:hover {
+    background: var(--accent-lt);
+    border-color: var(--accent);
+    text-decoration: none;
+}
