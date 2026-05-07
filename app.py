@@ -7,6 +7,9 @@ from flask_bcrypt import Bcrypt
 
 
 app = Flask(__name__)
+# Initialize Bcrypt for secure password hashing. 
+# We use bcrypt because it automatically handles 'salting' and has a 'work factor' 
+# to slow down brute-force attacks compared to MD5 or SHA-1
 bcrypt = Bcrypt(app)
 
 # ── Encryption Part 1: Secure Secret Key ─────────────────────
@@ -91,9 +94,10 @@ def register():
 
             # ─────────────────────────────────────────────
             # ── Password Storage Part 3: Hashing (Person 3 Task) ───
-            # VULNERABLE: Storing 'password' directly is insecure.
-            # SECURE: bcrypt.generate_password_hash creates a salted, secure hash.
+            # VULNERABLE: Storing 'password' as plaintext or MD5 exposes user credentials.
+            # SECURE: bcrypt.generate_password_hash creates a unique salted hash for every user.
             # We .decode('utf-8') to store it as a string in SQLite.
+            # even if two users have the same password, their hashes will differ due to salting, making it more secure against rainbow table attacks.
             hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
             # ─────────────────────────────────────────────
@@ -157,7 +161,7 @@ def login():
 
             else:
                 # SECURE VERSION (production-safe)
-                # 1. Fetch the user by username ONLY using a parameterized query.
+                # 1. Fetch the user by username ONLY using a parameterized query to prevent matching passwords in SQL.
                 user = conn.execute(
                     "SELECT * FROM users WHERE username = ?",
                     (username,),
