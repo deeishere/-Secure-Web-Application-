@@ -33,9 +33,6 @@ body {
     padding: 2rem 1rem;
 }
 
-
-/* ── Page wrapper ─────────────────────────── */
-
 .page {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -46,8 +43,6 @@ body {
     max-width: 480px;
 }
 
-
-/* ── Typography ───────────────────────────── */
 
 h1,
 h2,
@@ -82,9 +77,6 @@ p strong {
     color: var(--text);
     font-weight: 500;
 }
-
-
-/* ── Forms ────────────────────────────────── */
 
 form {
     display: flex;
@@ -148,8 +140,6 @@ button:hover {
 }
 
 
-/* ── Links ────────────────────────────────── */
-
 a {
     color: var(--accent);
     text-decoration: none;
@@ -159,9 +149,6 @@ a {
 a:hover {
     text-decoration: underline;
 }
-
-
-/* ── Comments ─────────────────────────────── */
 
 .comment-list p {
     padding: 0.6rem 0.85rem;
@@ -173,8 +160,6 @@ a:hover {
     line-height: 1.5;
 }
 
-
-/* ── Table ────────────────────────────────── */
 
 table {
     width: 100%;
@@ -208,19 +193,13 @@ tr:last-child td {
 }
 
 
-/* ── Admin page wider ─────────────────────── */
-
 .page.wide {
     max-width: 680px;
 }
 
-
-/* ── 403 page ─────────────────────────────── */
-
 .page h1+p {
     margin-bottom: 1.25rem;
 }
-/* ── Back button ───────────────────────── */
 
 .back-link {
     margin-top: 1.2rem;
