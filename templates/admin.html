@@ -1,38 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>Admin Panel</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta charset="UTF-8" />
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body>
-  <div class="page">
+    <div class="page">
 
-  <h1>Admin Panel</h1>
-  <p>Logged in as: {{ session["username"] }}</p>
+        <h1>Admin Panel</h1>
+        <p>Logged in as: {{ session["username"] }}</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Username</th>
-        <th>Role</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for u in users %}
-      <tr>
-        <td>{{ u.id }}</td>
-        <td>{{ u.username }}</td>
-        <td>{{ u.role }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        <table>
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.role }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
 
-  <br>
-  <a href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
-  </div>
+        <br>
+        <a href="{{ url_for('dashboard') }}">← Back to Dashboard</a>
+    </div>
 
 </body>
+
 </html>
