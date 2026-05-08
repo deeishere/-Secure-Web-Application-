@@ -17,7 +17,7 @@ This project is a simple Flask web application developed for the CSC security pr
 
 ```bash
 cd Desktop/Secure-Web-Application
-pip install -r requirements.txt
+pip install -r requirement.txt
 python app.py
 ```
 
@@ -114,3 +114,13 @@ The app runs on `https://` using a self-signed cert — you can see it in the UR
 - **cryptography** – for encrypting emails with Fernet
 - **bleach** – for sanitizing comments (XSS fix)
 - **pyOpenSSL** – to enable HTTPS locally
+
+## Challenges Faced
+
+During the development of the project, several challenges were encountered:
+
+- Maintaining a persistent Fernet encryption key across server restarts. This was solved by storing the generated key inside `fernet.key` instead of generating a new key every time the application runs.
+
+- Demonstrating both vulnerable and secure implementations in the same application without breaking functionality. This was solved using flags such as `SQL_INJECTION_MODE` and `SECURE_MODE`.
+
+- Running HTTPS locally using a self-signed certificate caused browser security warnings. This issue was expected and users can proceed manually for testing purposes.
