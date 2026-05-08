@@ -33,8 +33,9 @@ Then open your browser and go to `https://127.0.0.1:5000`
 Sec/
 ├── app.py
 ├── requirement.txt
-├── fernet.key        ← auto-generated
-├── users.db          ← auto-generated
+├── .gitignore
+├── fernet.key        ← auto-generated (excluded via .gitignore)
+├── users.db          ← auto-generated (excluded via .gitignore)
 ├── static/
 │   └── css/
 │       └── style.css
