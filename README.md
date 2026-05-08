@@ -16,7 +16,7 @@ This project is a simple Flask web application developed for the CSC security pr
 ## How to run it
 
 ```bash
-cd Desktop/Sec
+cd Desktop/Secure-Web-Application
 pip install -r requirements.txt
 python app.py
 ```
@@ -32,7 +32,7 @@ Then open your browser and go to `https://127.0.0.1:5000`
 ```
 Sec/
 ├── app.py
-├── requirements.txt
+├── requirement.txt
 ├── fernet.key        ← auto-generated
 ├── users.db          ← auto-generated
 ├── static/
